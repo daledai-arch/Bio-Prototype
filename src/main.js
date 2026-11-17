@@ -38,6 +38,7 @@ function tok(label, color, x, y, info, layer=L.fx){
   if (info) g.setAttribute("data-info", info);
   const kind = kindFor(info, label);
   const s = el("g", {class:"shape"}, g), geo = {r: drawShape(s, kind, info || label)};
+  g.insertBefore(el("circle", {class:"hit", r:(geo.r + 6).toFixed(1)}), s);
   const t = el("text", kind==="bead" ? {y:3.5, "text-anchor":"middle", class:"in"} : {y:geo.r+11, "text-anchor":"middle", class:"cap"}, g);
   const T = {g, s, t, x, y, color, kind};
   setColor(T, color); setLabel(T, label); place(T, x, y);
@@ -59,7 +60,18 @@ function move(T, x, y, ms=700){
   });
 }
 async function path(T, pts, ms=500){ for (const [x,y] of pts) await move(T,x,y,ms); }
+/* Products of reactions stay in the cell (as drifting molecules) instead of vanishing. */
+const settled = [], SETTLE_MAX = 260;
+function keepable(T){ return T.g.parentNode === L.fx && T.g.isConnected && !/^(e⁻|P|hydrolysis…)$/.test(T.label) && !/×/.test(T.label); }
+function settle(T){
+  L.amb.appendChild(T.g); T.g.setAttribute("opacity", .9);
+  const a = { T, box:[T.x-45, T.y-30, T.x+45, T.y+30], vx:(Math.random()-.5)*.15, vy:(Math.random()-.5)*.15,
+    label:T.label, color:T.color, info:T.g.getAttribute("data-info"), speed:.15, settled:true };
+  AMB.push(a); settled.push(a);
+  if (settled.length > SETTLE_MAX){ const old = settled.shift(), i = AMB.indexOf(old); if (i >= 0) AMB.splice(i, 1); old.T.g.remove(); }
+}
 function fade(T, ms=500){
+  if (keepable(T)){ settle(T); return Promise.resolve(); }
   const d = dur(ms), t0 = performance.now();
   return new Promise(res => { function f(now){ const k=Math.min(1,(now-t0)/d); T.g.setAttribute("opacity", 1-k); if(k<1) requestAnimationFrame(f); else { T.g.remove(); res(); } } requestAnimationFrame(f); });
 }
@@ -172,9 +184,13 @@ requestAnimationFrame(tick);
 function tagChips(cs){ return cs.map(c => `<span class="chip"><i style="background:${C[c]}"></i>${CN[c]}</span>`).join(""); }
 function showInfo(key){
   const i = INFO[key]; if (!i) return;
+  $("infocard").hidden = false;
   $("info").innerHTML = `<h2>Selected</h2><p class="info-name">${i.n}</p><div class="info-kind">${i.k}</div><p>${i.d}</p>${i.t?`<p class="try">${i.t}</p>`:""}<div class="tags">${tagChips(i.c)}</div>`;
 }
+let capTimer;
 function logStep(c, text){
+  const cap = $("caption"); cap.innerHTML = `<span class="t" style="color:${C[c]}">${CN[c]}</span>${text}`;
+  cap.classList.add("show"); clearTimeout(capTimer); capTimer = setTimeout(() => cap.classList.remove("show"), 7000);
   const li = document.createElement("li");
   li.style.borderLeftColor = C[c];
   li.innerHTML = `<span class="t" style="color:${C[c]}">${CN[c]}</span>${text}`;
@@ -891,20 +907,40 @@ async function review(unit){
 }
 $("reviewbtn").addEventListener("click", reviewMenu);
 
-/* ---------------- M7: tabs + benches ---------------- */
+/* ---------------- pages (flip in from the right) + labs ---------------- */
 const mountedViews = new Set();
 const benchEvent = k => complete(k);
-document.querySelectorAll(".tabs [role=tab]").forEach(b => b.addEventListener("click", () => {
-  const v = b.dataset.view;
-  document.querySelectorAll(".tabs [role=tab]").forEach(x => x.setAttribute("aria-selected", x === b));
-  ["cellView","enzymeView","geneView"].forEach(id => $(id).hidden = id !== v);
+let openId = null, curLab = null;
+function closePages(){
+  document.querySelectorAll(".page.open").forEach(p => { p.classList.remove("open"); p.setAttribute("aria-hidden", "true"); });
+  document.querySelectorAll("[data-page]").forEach(b => b.setAttribute("aria-expanded", "false"));
+  openId = null;
+}
+function openPage(id, keep){
+  if (openId === id && !keep) return closePages();
+  document.querySelectorAll(".page").forEach(p => { const on = p.id === id; p.classList.toggle("open", on); p.setAttribute("aria-hidden", String(!on)); });
+  document.querySelectorAll("[data-page]").forEach(b => b.setAttribute("aria-expanded", String(b.dataset.page === id)));
+  openId = id;
+  if (id === "pg-labs" && !curLab) showLab("enzymeView");
+  $(id).querySelector(".pclose").focus({ preventScroll:true });
+}
+function showLab(v){
+  curLab = v;
+  document.querySelectorAll("[data-view]").forEach(x => x.setAttribute("aria-selected", String(x.dataset.view === v)));
+  ["enzymeView","geneView"].forEach(id => $(id).hidden = id !== v);
   if (!mountedViews.has(v)){
     mountedViews.add(v);
     if (v === "enzymeView") mountEnzymeLab($(v), benchEvent);
     if (v === "geneView") mountGeneBench($(v), benchEvent);
   }
-}));
-
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-page]"); if (b) return openPage(b.dataset.page);
+  const v = e.target.closest("[data-view]"); if (v){ openPage("pg-labs", true); return showLab(v.dataset.view); }
+  if (e.target.closest(".pclose")) closePages();
+});
+document.addEventListener("keydown", e => { if (e.key === "Escape" && openId && $("quiz").hidden) closePages(); });
+$("infoclose").addEventListener("click", () => $("infocard").hidden = true);
 /* ---------------- in-cell molecules: drag any drifting molecule ---------------- */
 const ACT = {
   sglt: async () => {
@@ -991,7 +1027,8 @@ function dropAmbient(a, x, y){
   if (act && ACT[act]){
     AMB.splice(AMB.indexOf(a), 1); a.T.g.remove();
     guided(act, () => ACT[act](x, y, t));
-    setTimeout(() => wander(a.label, a.color, a.info, a.box, 1, a.speed), dur(6000));
+    if (!a.settled) setTimeout(() => wander(a.label, a.color, a.info, a.box, 1, a.speed), dur(6000));
+    else settled.splice(settled.indexOf(a), 1);
     return;
   }
   if (act) toast(act);
@@ -1041,6 +1078,16 @@ ITEMS.forEach(gr => {
   });
   tray.appendChild(g);
 });
+const dockTabs = $("dockTabs");
+ITEMS.forEach((gr, i) => {
+  const b = document.createElement("button"); b.type = "button"; b.className = "dtab"; b.textContent = gr.g;
+  b.style.setProperty("--c", C[gr.c]); b.addEventListener("click", () => setGroup(i)); dockTabs.appendChild(b);
+});
+function setGroup(i){
+  [...tray.children].forEach((g, j) => g.classList.toggle("active", j === i));
+  [...dockTabs.children].forEach((b, j) => b.setAttribute("aria-pressed", String(j === i)));
+}
+setGroup(0);
 
 let selected = null;
 const ghost = $("ghost");
@@ -1066,7 +1113,8 @@ function attachDrag(btn, it){
     if (!start) return;
     if (dragging){
       ghost.hidden = true; clearHints();
-      if (overSvg(e.clientX, e.clientY)){ const p = svgPoint(e.clientX, e.clientY); drop(it.key, p.x, p.y); }
+      const under = document.elementFromPoint(e.clientX, e.clientY);
+      if (under && under.closest("#cell")){ const p = svgPoint(e.clientX, e.clientY); drop(it.key, p.x, p.y); }
       select(null);
     } else {
       select(selected===it.key ? null : it.key);
@@ -1216,7 +1264,8 @@ const MHINT = {
 function showMe(k){
   const [it, tip] = MHINT[k] || []; if (!tip) return;
   if (it && it.startsWith("tab:")) return document.querySelector(`[data-view="${it.slice(4)}"]`).click();
-  if (it) select(it);
+  closePages();
+  if (it){ const gi = ITEMS.findIndex(g => g.list.some(x => x.key === it)); if (gi >= 0) setGroup(gi); select(it); }
   toast(tip);
 }
 $("missions").addEventListener("click", e => { const li = e.target.closest("li[data-k]"); if (li) showMe(li.dataset.k); });
@@ -1231,6 +1280,7 @@ $("traysearch").addEventListener("input", e => {
     g.querySelectorAll(".item").forEach(b => { const m = !q || b.textContent.toLowerCase().includes(q); b.hidden = !m; any = any || m; });
     g.hidden = !any;
   });
+  tray.classList.toggle("searching", !!q);
 });
 
 /* toolbar */
@@ -1245,9 +1295,12 @@ if (guidedMode) setMode(true);
 if (speeds.includes(saved.speed)){ si = speeds.indexOf(saved.speed); SPD = saved.speed; $("speedbtn").textContent = `Speed: ${SPD}×`; }
 $("resetprog").addEventListener("click", () => { if (confirm("Clear all completed missions? This can't be undone.")){ clear(); done.clear(); for (const k in scores) delete scores[k]; persist(); renderMissions(); } });
 $("resetbtn").addEventListener("click", () => location.reload());
-$("viewbtn").addEventListener("click", () => { const list = tray.classList.toggle("list"); $("viewbtn").textContent = list ? "Grid" : "List"; $("viewbtn").setAttribute("aria-pressed", list); });
+$("clearbtn").addEventListener("click", () => {
+  settled.splice(0).forEach(a => { const i = AMB.indexOf(a); if (i >= 0) AMB.splice(i, 1); a.T.g.remove(); });
+  logStep("bio", "Cleared the leftover molecules from earlier reactions.");
+});
 
 /* initial state */
 renderMissions();
-$("info").innerHTML = `<h2>Start here</h2><p class="info-name">A cell you can poke</p><div class="info-kind">Biology I · cell lab</div><p>Every labeled part and every drifting molecule is clickable. Drag a molecule from the tray onto its target to run a pathway, and follow each step in the notebook below.</p><p class="try">Good first try: drag Epinephrine onto the β-adrenergic receptor at the top left.</p>`;
+$("info").innerHTML = `<h2>Start here</h2><p class="info-name">A cell you can poke</p><div class="info-kind">Biology I · cell lab</div><p>Click anything to name it. Drag a molecule from the dock at the bottom onto its target to run a pathway. The buttons on the right open your notes, missions, data, study mode, labs and settings.</p><p class="try">Good first try: drag Epinephrine onto the β-adrenergic receptor at the top left.</p>`;
 logStep("sig", "Cell at rest. Na⁺ is high outside, K⁺ high inside, and ATP is drifting in the cytosol.");

@@ -14,59 +14,8 @@
 <link rel="stylesheet" href="/src/styles.css">
 </head>
 <body>
-<header>
-  <h1>Living Cell <span>Lab</span></h1>
-  <p>Drag a molecule from the tray onto the cell, or tap it and then tap a spot. Click anything in the cell to name it.</p>
-  <div class="legend" aria-label="Concept colors">
-    <span class="chip"><i style="background:var(--c-gen)"></i>Genetics</span>
-    <span class="chip"><i style="background:var(--c-sig)"></i>Signal transduction</span>
-    <span class="chip"><i style="background:var(--c-nrg)"></i>Cellular energetics</span>
-    <span class="chip"><i style="background:var(--c-bio)"></i>Biochemistry</span>
-    <span class="chip"><i style="background:var(--c-endo)"></i>Endomembrane</span>
-  </div>
-</header>
-
-<nav class="tabs" role="tablist" aria-label="Views">
-  <button role="tab" aria-selected="true" data-view="cellView" type="button">Cell</button>
-  <button role="tab" aria-selected="false" data-view="enzymeView" type="button">Enzyme lab</button>
-  <button role="tab" aria-selected="false" data-view="geneView" type="button">Genetics bench</button>
-</nav>
-<main id="cellView">
-  <section class="col" aria-label="Molecule tray and missions">
-    <div class="card">
-      <h2>Molecule tray <button class="mini" id="viewbtn" type="button" aria-pressed="false">List</button></h2>
-      <input id="traysearch" class="search" type="search" placeholder="Search molecules…" aria-label="Search molecules">
-      <div class="tray-groups" id="tray"></div>
-    </div>
-    <div class="card">
-      <h2>Missions <span class="progress" id="mprog">0/10</span> <button class="mini" id="resetprog" type="button">Reset progress</button></h2>
-      <p class="note" style="margin:0 0 8px">Click a mission for a hint.</p>
-      <ul class="missions" id="missions"></ul>
-    </div>
-  </section>
-
-  <section class="col stage-wrap" aria-label="Cell">
-    <div class="toolbar">
-      <div class="tgroup" role="group" aria-label="Study"><span class="tlabel">Study</span>
-        <button class="tbtn" id="modebtn" aria-pressed="false">Mode: Explore</button>
-        <button class="tbtn" id="reviewbtn">Review quiz</button></div>
-      <div class="tgroup" role="group" aria-label="Conditions"><span class="tlabel">Conditions</span>
-        <button class="tbtn" id="o2btn" aria-pressed="true">Oxygen: present</button>
-        <button class="tbtn" id="tonbtn">Outside: isotonic</button>
-        <button class="tbtn" id="orgbtn">Organism: animal</button></div>
-      <div class="tgroup" role="group" aria-label="View"><span class="tlabel">View</span>
-        <button class="tbtn icon" id="zoomout" aria-label="Zoom out">−</button>
-        <span class="zoomlvl" id="zoomlvl" aria-live="polite">100%</span>
-        <button class="tbtn icon" id="zoomin" aria-label="Zoom in">+</button>
-        <button class="tbtn" id="zoomfit">Fit</button>
-        <button class="tbtn" id="followbtn" aria-pressed="true">Follow: on</button></div>
-      <div class="tgroup" role="group" aria-label="Simulation"><span class="tlabel">Sim</span>
-        <button class="tbtn" id="speedbtn">Speed: 1×</button>
-        <button class="tbtn" id="resetbtn">Reset cell</button></div>
-    </div>
-    <div class="statusbar"><span class="status" id="status">Nothing selected</span><span class="hint">Scroll to zoom · drag empty space to pan · click anything to name it</span></div>
-    <div class="toast" id="toast" role="status"></div>
-    <svg id="cell" viewBox="0 0 1200 760" aria-label="Animal cell with organelles">
+<div id="stage">
+<svg id="cell" viewBox="0 0 1200 760" aria-label="Animal cell with organelles. Click a part to name it; drag molecules onto targets.">
       <defs>
         <filter id="glowF" x="-50%" y="-50%" width="200%" height="200%">
           <feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
@@ -295,37 +244,115 @@
       <g id="hints"></g>
       <g id="tags"></g>
     </svg>
-  </section>
+</div>
 
-  <section class="col" aria-label="Notebook">
-    <div class="card info" id="info" aria-live="polite"></div>
-    <div class="card">
-      <h2>What just happened</h2>
-      <ol class="log" id="log" aria-live="polite"></ol>
-    </div>
-    <div class="card">
-      <h2>Gene readout · central dogma</h2>
-      <div class="seq" id="seq"></div>
-      <p class="note">First codons of the cortisol-responsive gene. Cortisol switches it on.</p>
-    </div>
-    <div class="card">
-      <h2>Energy ledger · one glucose</h2>
-      <table class="ledger">
-        <thead><tr><th>Stage</th><th>ATP</th><th>NADH</th><th>FADH₂</th><th>CO₂</th></tr></thead>
-        <tbody>
-          <tr><td>Glycolysis (net)</td><td id="lg-gly-atp">0</td><td id="lg-gly-nadh">0</td><td>–</td><td>–</td></tr>
-          <tr><td>Pyruvate oxidation</td><td>–</td><td id="lg-pox-nadh">0</td><td>–</td><td id="lg-pox-co2">0</td></tr>
-          <tr><td>Citric acid cycle</td><td id="lg-tca-atp">0</td><td id="lg-tca-nadh">0</td><td id="lg-tca-fadh">0</td><td id="lg-tca-co2">0</td></tr>
-          <tr><td>ETC + ATP synthase</td><td id="lg-etc-atp">0</td><td>–</td><td>–</td><td>–</td></tr>
-          <tr class="total"><td>Total ATP</td><td id="lg-total">0</td><td></td><td></td><td></td></tr>
-        </tbody>
-      </table>
-      <p class="note" id="ledgerNote">Drop glucose on GLUT1 to run cellular respiration. NADH → 2.5 ATP, FADH₂ → 1.5 ATP.</p>
-    </div>
-  </section>
-</main>
-<main id="enzymeView" class="bench" hidden></main>
-<main id="geneView" class="bench" hidden></main>
+<!-- HUD -->
+<div class="hud hud-tl">
+  <div class="brand">Living Cell <span>Lab</span></div>
+  <button class="pill" type="button" data-page="pg-missions" aria-label="Open missions">Missions <b id="mprog">0/0</b></button>
+</div>
+<div class="caption" id="caption" aria-live="polite"></div>
+<div class="toast" id="toast" role="status"></div>
+
+<nav class="hud hud-r" aria-label="Pages">
+  <button class="rbtn" type="button" data-page="pg-notebook"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h11a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6zM6 3v18M10 8h6M10 12h6"/></svg><span>Notes</span></button>
+  <button class="rbtn" type="button" data-page="pg-missions"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l4 4 10-10"/></svg><span>Missions</span></button>
+  <button class="rbtn" type="button" data-page="pg-data"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Data</span></button>
+  <button class="rbtn" type="button" data-page="pg-study"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 9a3 3 0 1 1 4 2.8c-.7.3-1 .9-1 1.7V14M12 18h.01"/><circle cx="12" cy="12" r="10"/></svg><span>Study</span></button>
+  <button class="rbtn" type="button" data-page="pg-labs"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3"/></svg><span>Labs</span></button>
+  <button class="rbtn" type="button" data-page="pg-settings"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg><span>Settings</span></button>
+</nav>
+
+<div class="hud hud-br" role="group" aria-label="Camera">
+  <button class="cbtn" id="zoomout" type="button" aria-label="Zoom out">−</button>
+  <span class="zoomlvl" id="zoomlvl">100%</span>
+  <button class="cbtn" id="zoomin" type="button" aria-label="Zoom in">+</button>
+  <button class="cbtn wide" id="zoomfit" type="button">Fit</button>
+  <button class="cbtn wide" id="followbtn" type="button" aria-pressed="true">Follow: on</button>
+</div>
+
+<div class="infocard" id="infocard">
+  <button class="x" id="infoclose" type="button" aria-label="Close info">×</button>
+  <div class="info" id="info" aria-live="polite"></div>
+</div>
+
+<div class="dock" id="dock" aria-label="Molecule dock">
+  <div class="dock-head">
+    <div class="dock-tabs" id="dockTabs" role="toolbar" aria-label="Molecule groups"></div>
+    <input id="traysearch" class="search" type="search" placeholder="Search…" aria-label="Search molecules">
+  </div>
+  <div class="tray-groups" id="tray"></div>
+  <div class="status" id="status">Drag a molecule onto the cell, or tap it and then tap a target.</div>
+</div>
+
+<!-- Pages (flip in from the right) -->
+<section class="page" id="pg-notebook" aria-label="Notebook" aria-hidden="true">
+  <header><h2>Notebook</h2><button class="pclose" type="button" aria-label="Close page">×</button></header>
+  <div class="legend">
+    <span class="chip"><i style="background:var(--c-gen)"></i>Genetics</span>
+    <span class="chip"><i style="background:var(--c-sig)"></i>Signal transduction</span>
+    <span class="chip"><i style="background:var(--c-nrg)"></i>Cellular energetics</span>
+    <span class="chip"><i style="background:var(--c-bio)"></i>Biochemistry</span>
+    <span class="chip"><i style="background:var(--c-endo)"></i>Endomembrane</span>
+  </div>
+  <h3>What just happened</h3>
+  <ol class="log" id="log" aria-live="polite"></ol>
+</section>
+
+<section class="page" id="pg-missions" aria-label="Missions" aria-hidden="true">
+  <header><h2>Missions</h2><button class="pclose" type="button" aria-label="Close page">×</button></header>
+  <p class="note">Click a mission for a hint. Progress is saved in this browser.</p>
+  <ul class="missions" id="missions"></ul>
+  <button class="btn ghostbtn" id="resetprog" type="button">Reset progress</button>
+</section>
+
+<section class="page" id="pg-data" aria-label="Data" aria-hidden="true">
+  <header><h2>Data</h2><button class="pclose" type="button" aria-label="Close page">×</button></header>
+  <h3>Gene readout · central dogma</h3>
+  <div class="seq" id="seq"></div>
+  <p class="note">First codons of the cortisol-responsive gene. Cortisol switches it on.</p>
+  <h3>Energy ledger · one glucose</h3>
+  <table class="ledger">
+    <thead><tr><th>Stage</th><th>ATP</th><th>NADH</th><th>FADH₂</th><th>CO₂</th></tr></thead>
+    <tbody>
+      <tr><td>Glycolysis (net)</td><td id="lg-gly-atp">0</td><td id="lg-gly-nadh">0</td><td>–</td><td>–</td></tr>
+      <tr><td>Pyruvate oxidation</td><td>–</td><td id="lg-pox-nadh">0</td><td>–</td><td id="lg-pox-co2">0</td></tr>
+      <tr><td>Citric acid cycle</td><td id="lg-tca-atp">0</td><td id="lg-tca-nadh">0</td><td id="lg-tca-fadh">0</td><td id="lg-tca-co2">0</td></tr>
+      <tr><td>ETC + ATP synthase</td><td id="lg-etc-atp">0</td><td>–</td><td>–</td><td>–</td></tr>
+      <tr class="total"><td>Total ATP</td><td id="lg-total">0</td><td></td><td></td><td></td></tr>
+    </tbody>
+  </table>
+  <p class="note" id="ledgerNote">Drop glucose on GLUT1 to run cellular respiration. NADH → 2.5 ATP, FADH₂ → 1.5 ATP.</p>
+</section>
+
+<section class="page" id="pg-study" aria-label="Study" aria-hidden="true">
+  <header><h2>Study</h2><button class="pclose" type="button" aria-label="Close page">×</button></header>
+  <p>In <b>Guided</b> mode you predict what will happen before each pathway runs, then watch the answer.</p>
+  <div class="row"><button class="btn" id="modebtn" type="button" aria-pressed="false">Mode: Explore</button></div>
+  <p>Test yourself on one unit at a time. Scores are saved.</p>
+  <div class="row"><button class="btn primary" id="reviewbtn" type="button">Start review quiz</button></div>
+</section>
+
+<section class="page" id="pg-settings" aria-label="Settings" aria-hidden="true">
+  <header><h2>Settings</h2><button class="pclose" type="button" aria-label="Close page">×</button></header>
+  <h3>Conditions</h3>
+  <div class="row"><button class="btn" id="o2btn" type="button" aria-pressed="true">Oxygen: present</button></div>
+  <div class="row"><button class="btn" id="tonbtn" type="button">Outside: isotonic</button></div>
+  <div class="row"><button class="btn" id="orgbtn" type="button">Organism: animal</button></div>
+  <h3>Simulation</h3>
+  <div class="row"><button class="btn" id="speedbtn" type="button">Speed: 1×</button></div>
+  <div class="row"><button class="btn" id="clearbtn" type="button">Clear leftover molecules</button> <button class="btn" id="resetbtn" type="button">Reset cell</button></div>
+  <h3>Controls</h3>
+  <p class="note">Scroll to zoom · drag empty space to pan · click anything to name it · drag drifting molecules onto targets · Esc closes pages.</p>
+</section>
+
+<section class="page wide" id="pg-labs" aria-label="Labs" aria-hidden="true">
+  <header><h2>Labs</h2>
+    <div class="labtabs" role="tablist"><button role="tab" type="button" data-view="enzymeView" aria-selected="false">Enzyme lab</button><button role="tab" type="button" data-view="geneView" aria-selected="false">Genetics bench</button></div>
+    <button class="pclose" type="button" aria-label="Close page">×</button></header>
+  <div id="enzymeView" class="bench" hidden></div>
+  <div id="geneView" class="bench" hidden></div>
+</section>
 
 <div class="ghost" id="ghost" hidden></div>
 <div class="modal" id="quiz" hidden role="dialog" aria-modal="true" aria-labelledby="qtitle">
